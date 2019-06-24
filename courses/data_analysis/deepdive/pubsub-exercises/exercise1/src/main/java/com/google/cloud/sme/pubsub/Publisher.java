@@ -20,6 +20,7 @@ import com.beust.jcommander.Parameter;
 import com.google.api.core.ApiFuture;
 import com.google.api.gax.batching.BatchingSettings;
 import com.google.api.gax.core.FixedExecutorProvider;
+import com.google.api.gax.grpc.InstantiatingGrpcChannelProvider;
 import com.google.cloud.sme.Entities;
 import com.google.cloud.sme.common.ActionReader;
 import com.google.cloud.sme.common.ActionUtils;
@@ -47,7 +48,7 @@ public class Publisher {
   private static final String SOURCE_DATA = "actions.csv";
   private static final String TIMESTAMP_KEY = "publish_time";
   private static final String TOPIC = "pubsub-e2e-example";
-  private static final int MESSAGE_COUNT = 1000000;
+  private static final int MESSAGE_COUNT = 10000;
 
   private final Args args;
   private com.google.cloud.pubsub.v1.Publisher publisher;
@@ -63,9 +64,11 @@ public class Publisher {
     byte[] extraBytes = new byte[1024];
     this.extraInfo = ByteString.copyFrom(extraBytes);
 
+    InstantiatingGrpcChannelProvider loadtestProvider = InstantiatingGrpcChannelProvider.newBuilder().setEndpoint("loadtest-pubsub.sandbox.googleapis.com:443").build();
+
     ProjectTopicName topic = ProjectTopicName.of(args.project, TOPIC);
     com.google.cloud.pubsub.v1.Publisher.Builder builder =
-        com.google.cloud.pubsub.v1.Publisher.newBuilder(topic);
+        com.google.cloud.pubsub.v1.Publisher.newBuilder(topic).setChannelProvider(loadtestProvider);
     try {
       this.publisher = builder.build();
     } catch (Exception e) {
@@ -81,6 +84,7 @@ public class Publisher {
     PubsubMessage message =
         PubsubMessage.newBuilder()
             .setData(ActionUtils.encodeAction(publishAction))
+            .setOrderingKey(Long.toString(publishAction.getUserId()))
             .putAttributes(TIMESTAMP_KEY, Long.toString(publishTime))
             .build();
     ApiFuture<String> response = publisher.publish(message);

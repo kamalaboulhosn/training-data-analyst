@@ -18,6 +18,7 @@ package com.google.cloud.sme.pubsub;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.google.api.gax.batching.FlowControlSettings;
+import com.google.api.gax.grpc.InstantiatingGrpcChannelProvider;
 import com.google.cloud.pubsub.v1.AckReplyConsumer;
 import com.google.cloud.pubsub.v1.MessageReceiver;
 import com.google.pubsub.v1.PubsubMessage;
@@ -59,9 +60,11 @@ public class Subscriber implements MessageReceiver {
   private Subscriber(Args args) {
     this.args = args;
 
+    InstantiatingGrpcChannelProvider loadtestProvider = InstantiatingGrpcChannelProvider.newBuilder().setEndpoint("loadtest-pubsub.sandbox.googleapis.com:443").build();
+
     ProjectSubscriptionName subscription = ProjectSubscriptionName.of(args.project, args.subscription);
     com.google.cloud.pubsub.v1.Subscriber.Builder builder =
-        com.google.cloud.pubsub.v1.Subscriber.newBuilder(subscription, this);
+        com.google.cloud.pubsub.v1.Subscriber.newBuilder(subscription, this).setChannelProvider(loadtestProvider);
     try {
       this.subscriber = builder.build();
     } catch (Exception e) {
