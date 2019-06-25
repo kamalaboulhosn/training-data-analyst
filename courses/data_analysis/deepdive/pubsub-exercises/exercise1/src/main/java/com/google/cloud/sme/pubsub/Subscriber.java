@@ -46,7 +46,9 @@ public class Subscriber implements MessageReceiver {
     public String subscription = null;
   }
 
+  private static final String VERIFIER_OUTPUT = "received.csv";
   private static final String TIMESTAMP_KEY = "publish_time";
+  private static final String ORDERING_SEQUENCE_KEY = "ordering_seq";
 
   private final Args args;
   private com.google.cloud.pubsub.v1.Subscriber subscriber;
@@ -56,6 +58,7 @@ public class Subscriber implements MessageReceiver {
   private Long outOfOrderCount = new Long(0);
   private Long lastReceivedTimestamp = new Long(0);
 
+  private VerifierWriter vWriter;
 
   private Subscriber(Args args) {
     this.args = args;
@@ -71,6 +74,8 @@ public class Subscriber implements MessageReceiver {
       System.out.println("Could not create subscriber: " + e);
       System.exit(1);
     }
+
+    this.vWriter = new VerifierWriter(VERIFIER_OUTPUT);
   }
 
   @Override
@@ -78,7 +83,10 @@ public class Subscriber implements MessageReceiver {
     long size = message.getData().size();
     long now = DateTime.now().getMillis();
     String publishTime = message.getAttributesOrDefault(TIMESTAMP_KEY, "");
+    String sequenceNumStr = message.getAttributesOrDefault(ORDERING_SEQUENCE_KEY, "-1");
+    int sequenceNum = Integer.parseInt(sequenceNumStr);
     long receivedCount = receivedMessageCount.addAndGet(1);
+    vWriter.write(message.getOrderingKey(), sequenceNum);
     if (publishTime != "") {
       long publishTimeParsed = 0L;
       try {
@@ -123,6 +131,7 @@ public class Subscriber implements MessageReceiver {
     System.out.println(
         "Subscriber has not received message in 10s. Stopping.");
     subscriber.awaitTerminated();
+    vWriter.shutdown();
   }
 
   public static void main(String[] args) {

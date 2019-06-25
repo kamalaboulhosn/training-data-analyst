@@ -28,10 +28,6 @@ import com.google.cloud.sme.common.FileActionReader;
 import com.google.protobuf.ByteString;
 import com.google.pubsub.v1.PubsubMessage;
 import com.google.pubsub.v1.ProjectTopicName;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.File;
-import java.io.FileWriter;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
@@ -52,6 +48,7 @@ public class Publisher {
   private static final String SOURCE_DATA = "actions.csv";
   private static final String VERIFIER_OUTPUT = "publish.csv";
   private static final String TIMESTAMP_KEY = "publish_time";
+  private static final String ORDERING_SEQUENCE_KEY = "ordering_seq";
   private static final String TOPIC = "pubsub-e2e-example";
   private static final int MESSAGE_COUNT = 10000;
 
@@ -62,9 +59,7 @@ public class Publisher {
   private ExecutorService executor = Executors.newCachedThreadPool();
   private ByteString extraInfo;
 
-  private File verifierOutput;
-  private FileWriter verifierWriter;
-  private BufferedWriter verifierBWriter;
+  private VerifierWriter vWriter;
 
   private Publisher(Args args, ActionReader actionReader) {
     this.args = args;
@@ -85,19 +80,10 @@ public class Publisher {
       System.exit(1);
     }
 
-    try {
-      this.verifierOutput = new File(VERIFIER_OUTPUT);
-      this.verifierOutput.delete();
-      this.verifierOutput.createNewFile();
-      this.verifierWriter = new FileWriter(this.verifierOutput);
-      this.verifierBWriter = new BufferedWriter(this.verifierWriter);
-    } catch (IOException e) {
-      System.out.println("Could not create verifier output: " + e);
-      System.exit(1);
-    }
+    this.vWriter = new VerifierWriter(VERIFIER_OUTPUT);
   }
 
-  private void Publish(Entities.Action publishAction) {
+  private void Publish(Entities.Action publishAction, long index) {
     awaitedFutures.incrementAndGet();
     publishAction = Entities.Action.newBuilder(publishAction).setExtraInfo(this.extraInfo).build();
     final long publishTime = DateTime.now().getMillis();
@@ -106,6 +92,7 @@ public class Publisher {
             .setData(ActionUtils.encodeAction(publishAction))
             .setOrderingKey(Long.toString(publishAction.getUserId()))
             .putAttributes(TIMESTAMP_KEY, Long.toString(publishTime))
+            .putAttributes(ORDERING_SEQUENCE_KEY, Long.toString(index))
             .build();
     ApiFuture<String> response = publisher.publish(message);
     response.addListener(
@@ -126,14 +113,8 @@ public class Publisher {
 
     Entities.Action nextAction = actionReader.next();
     for (int i = 0; i < MESSAGE_COUNT; ++i) {
-      try {
-        verifierBWriter.write("\"" + nextAction.getUserId() + "\",\"message" + i + "\"");
-        verifierBWriter.newLine();
-      } catch (IOException e) {
-        System.out.println("Failed to write published message: " + e);
-        System.exit(1);
-      }
-      Publish(nextAction);
+      vWriter.write(Long.toString(nextAction.getUserId()), i);
+      Publish(nextAction, i);
       nextAction = actionReader.next();
       if ((i + 1) % 100000 == 0) {
         System.out.println("Published " + (i + 1) + " messages.");
@@ -150,6 +131,7 @@ public class Publisher {
     } catch (InterruptedException e) {
       System.out.println("Error while waiting for completion: " + e);
     }
+    vWriter.shutdown();
     executor.shutdownNow();
   }
 
@@ -158,11 +140,6 @@ public class Publisher {
       publisher.shutdown();
     } catch (Exception e) {
       System.out.println("Error while shutting down: " + e);
-    }
-    try {
-      verifierBWriter.close();
-    } catch (IOException e) {
-      System.out.println("Failed to close: " + e);
     }
   }
 
