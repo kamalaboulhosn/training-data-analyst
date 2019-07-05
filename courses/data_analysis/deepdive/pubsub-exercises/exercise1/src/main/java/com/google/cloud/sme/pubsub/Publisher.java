@@ -21,6 +21,7 @@ import com.google.api.core.ApiFuture;
 import com.google.api.gax.batching.BatchingSettings;
 import com.google.api.gax.core.FixedExecutorProvider;
 import com.google.api.gax.grpc.InstantiatingGrpcChannelProvider;
+import com.google.api.gax.retrying.RetrySettings;
 import com.google.cloud.sme.Entities;
 import com.google.cloud.sme.common.ActionReader;
 import com.google.cloud.sme.common.ActionUtils;
@@ -70,9 +71,11 @@ public class Publisher {
 
     InstantiatingGrpcChannelProvider loadtestProvider = InstantiatingGrpcChannelProvider.newBuilder().setEndpoint("loadtest-pubsub.sandbox.googleapis.com:443").build();
 
+    RetrySettings retrySettings = RetrySettings.newBuilder().setTotalTimeout(Duration.ofSeconds(120)).setInitialRpcTimeout(Duration.ofSeconds(20)).setMaxRpcTimeout(Duration.ofSeconds(60)).build();
+
     ProjectTopicName topic = ProjectTopicName.of(args.project, TOPIC);
     com.google.cloud.pubsub.v1.Publisher.Builder builder =
-        com.google.cloud.pubsub.v1.Publisher.newBuilder(topic).setChannelProvider(loadtestProvider);
+        com.google.cloud.pubsub.v1.Publisher.newBuilder(topic).setChannelProvider(loadtestProvider).setRetrySettings(retrySettings);
     try {
       this.publisher = builder.build();
     } catch (Exception e) {
