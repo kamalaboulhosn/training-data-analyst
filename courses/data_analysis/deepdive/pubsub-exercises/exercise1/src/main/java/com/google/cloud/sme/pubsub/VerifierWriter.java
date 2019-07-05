@@ -39,7 +39,7 @@ public class VerifierWriter {
     }
   }
 
-  public void write(String orderingKey, int sequenceNum) {
+  public synchronized void write(String orderingKey, int sequenceNum) {
     try {
       verifierBWriter.write("\"" + orderingKey + "\",\"message" + sequenceNum + "\"");
       verifierBWriter.newLine();
@@ -49,7 +49,7 @@ public class VerifierWriter {
     }
   }
 
-  public void shutdown() {
+  public synchronized void shutdown() {
     try {
       verifierBWriter.close();
     } catch (IOException e) {
