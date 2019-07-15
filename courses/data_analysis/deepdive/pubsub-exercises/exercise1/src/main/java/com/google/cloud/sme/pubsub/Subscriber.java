@@ -117,7 +117,7 @@ public class Subscriber implements MessageReceiver {
     while (true) {
       long now = DateTime.now().getMillis();
       synchronized (lastTimestamp) {
-        if (lastReceivedTimestamp > 0 && ((now - lastReceivedTimestamp) > 10000)) {
+        if (lastReceivedTimestamp > 0 && ((now - lastReceivedTimestamp) > 60000)) {
           subscriber.stopAsync();
           break;
         }
@@ -129,7 +129,7 @@ public class Subscriber implements MessageReceiver {
       }
     }
     System.out.println(
-        "Subscriber has not received message in 10s. Stopping.");
+        "Subscriber has not received message in 60s. Stopping.");
     subscriber.awaitTerminated();
     vWriter.shutdown();
   }
