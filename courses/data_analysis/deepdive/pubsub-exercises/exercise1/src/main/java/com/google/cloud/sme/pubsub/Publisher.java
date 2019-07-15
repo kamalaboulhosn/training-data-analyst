@@ -75,7 +75,7 @@ public class Publisher {
 
     ProjectTopicName topic = ProjectTopicName.of(args.project, TOPIC);
     com.google.cloud.pubsub.v1.Publisher.Builder builder =
-        com.google.cloud.pubsub.v1.Publisher.newBuilder(topic).setChannelProvider(loadtestProvider).setRetrySettings(retrySettings);
+        com.google.cloud.pubsub.v1.Publisher.newBuilder(topic).setChannelProvider(loadtestProvider).setRetrySettings(retrySettings).setEnableMessageOrdering(true);
     try {
       this.publisher = builder.build();
     } catch (Exception e) {
