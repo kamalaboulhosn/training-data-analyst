@@ -18,8 +18,6 @@ package com.google.cloud.sme.pubsub;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.google.api.core.ApiFuture;
-import com.google.api.gax.batching.BatchingSettings;
-import com.google.api.gax.core.FixedExecutorProvider;
 import com.google.api.gax.grpc.InstantiatingGrpcChannelProvider;
 import com.google.api.gax.retrying.RetrySettings;
 import com.google.cloud.sme.Entities;
@@ -27,13 +25,13 @@ import com.google.cloud.sme.common.ActionReader;
 import com.google.cloud.sme.common.ActionUtils;
 import com.google.cloud.sme.common.FileActionReader;
 import com.google.protobuf.ByteString;
-import com.google.pubsub.v1.PubsubMessage;
 import com.google.pubsub.v1.ProjectTopicName;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.Semaphore;
+import com.google.pubsub.v1.PubsubMessage;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicLong;
 import org.joda.time.DateTime;
 import org.threeten.bp.Duration;
 
@@ -41,10 +39,9 @@ import org.threeten.bp.Duration;
 public class Publisher {
   public static class Args {
     @Parameter(
-      names = {"--project", "-p"},
-      required = true,
-      description = "The Google Cloud Pub/Sub project in which the topic exists."
-    )
+        names = {"--project", "-p"},
+        required = true,
+        description = "The Google Cloud Pub/Sub project in which the topic exists.")
     public String project = null;
   }
 
@@ -59,13 +56,13 @@ public class Publisher {
   private com.google.cloud.pubsub.v1.Publisher publisher;
   private ActionReader actionReader;
   private AtomicLong awaitedFutures;
-    private ExecutorService executor = Executors.newCachedThreadPool();
+  private ExecutorService executor = Executors.newCachedThreadPool();
   private ByteString extraInfo;
   private Semaphore publishRateLimiter = new Semaphore(1000);
 
   private VerifierWriter vWriter;
 
-  private Stats stats;    
+  private Stats stats;
 
   private Publisher(Args args, ActionReader actionReader) {
     this.args = args;
@@ -73,20 +70,29 @@ public class Publisher {
     this.awaitedFutures = new AtomicLong();
     byte[] extraBytes = new byte[1024];
     this.extraInfo = ByteString.copyFrom(extraBytes);
-    this.stats = new Stats();    
+    this.stats = new Stats();
 
-    InstantiatingGrpcChannelProvider loadtestProvider = InstantiatingGrpcChannelProvider.newBuilder().setEndpoint("loadtest-pubsub.sandbox.googleapis.com:443").build();
+    InstantiatingGrpcChannelProvider loadtestProvider =
+        InstantiatingGrpcChannelProvider.newBuilder()
+            .setEndpoint("loadtest-pubsub.sandbox.googleapis.com:443")
+            .build();
 
-    RetrySettings retrySettings = RetrySettings.newBuilder().setTotalTimeout(Duration.ofSeconds(120)).setInitialRpcTimeout(Duration.ofSeconds(10)).setMaxRpcTimeout(Duration.ofSeconds(60)).build();
-    //BatchingSettings batchSettings = BatchingSettings.newBuilder().setElementCountThreshold(1L).setRequestByteThreshold(10L).setDelayThreshold(Duration.ofMillis(1)).build();
+    RetrySettings retrySettings =
+        RetrySettings.newBuilder()
+            .setTotalTimeout(Duration.ofSeconds(120))
+            .setInitialRpcTimeout(Duration.ofSeconds(10))
+            .setMaxRpcTimeout(Duration.ofSeconds(60))
+            .build();
+    // BatchingSettings batchSettings =
+    // BatchingSettings.newBuilder().setElementCountThreshold(1L).setRequestByteThreshold(10L).setDelayThreshold(Duration.ofMillis(1)).build();
 
     ProjectTopicName topic = ProjectTopicName.of(args.project, TOPIC);
     com.google.cloud.pubsub.v1.Publisher.Builder builder =
         com.google.cloud.pubsub.v1.Publisher.newBuilder(topic)
-	.setChannelProvider(loadtestProvider)
-	.setRetrySettings(retrySettings)
-	//.setBatchingSettings(batchSettings)
-	.setEnableMessageOrdering(true);
+            .setChannelProvider(loadtestProvider)
+            .setRetrySettings(retrySettings)
+            // .setBatchingSettings(batchSettings)
+            .setEnableMessageOrdering(true);
     try {
       this.publisher = builder.build();
     } catch (Exception e) {
@@ -98,19 +104,19 @@ public class Publisher {
   }
 
   private void Publish(Entities.Action publishAction, long orderingKey, long index) {
-   try {
+    try {
       publishRateLimiter.acquire();
-   } catch (Exception e) {
-     System.out.println("Interrupted!");
-     return;
-   }
+    } catch (Exception e) {
+      System.out.println("Interrupted!");
+      return;
+    }
     awaitedFutures.incrementAndGet();
     publishAction = Entities.Action.newBuilder(publishAction).setExtraInfo(this.extraInfo).build();
     final long publishTime = DateTime.now().getMillis();
     PubsubMessage message =
         PubsubMessage.newBuilder()
             .setData(ActionUtils.encodeAction(publishAction))
-	    .setOrderingKey(Long.toString(orderingKey))
+            .setOrderingKey(Long.toString(orderingKey))
             .putAttributes(TIMESTAMP_KEY, Long.toString(publishTime))
             .putAttributes(ORDERING_SEQUENCE_KEY, Long.toString(index))
             .build();
@@ -119,7 +125,7 @@ public class Publisher {
         () -> {
           publishRateLimiter.release();
           try {
-            stats.recordLatency(DateTime.now().getMillis() - publishTime);	    	      
+            stats.recordLatency(DateTime.now().getMillis() - publishTime);
             response.get();
           } catch (Exception e) {
             System.out.println("Could not publish a message: " + e);
@@ -136,8 +142,8 @@ public class Publisher {
 
     Entities.Action nextAction = actionReader.next();
     for (int i = 0; i < MESSAGE_COUNT; ++i) {
-	long orderingKey = nextAction.getUserId();
-	vWriter.write(Long.toString(orderingKey), i);
+      long orderingKey = nextAction.getUserId();
+      vWriter.write(Long.toString(orderingKey), i);
       Publish(nextAction, orderingKey, i);
       nextAction = actionReader.next();
       if ((i + 1) % 10000 == 0) {
@@ -157,10 +163,10 @@ public class Publisher {
     }
     stats.stop(DateTime.now().getMillis());
     System.out.println("Publish latency");
-    Map<Double, Long> latencies = stats.getLatencies();    
+    Map<Double, Long> latencies = stats.getLatencies();
     for (Map.Entry<Double, Long> latency : latencies.entrySet()) {
       System.out.println(" " + latency.getKey() + "th percentile: " + latency.getValue() + "ms");
-    }    
+    }
     vWriter.shutdown();
     executor.shutdownNow();
   }

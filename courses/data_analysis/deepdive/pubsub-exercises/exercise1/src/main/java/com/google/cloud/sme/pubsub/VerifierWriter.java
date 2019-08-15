@@ -16,9 +16,9 @@
 package com.google.cloud.sme.pubsub;
 
 import java.io.BufferedWriter;
-import java.io.IOException;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 
 /** A basic Pub/Sub publisher for purposes of demonstrating use of the API. */
 public class VerifierWriter {

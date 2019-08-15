@@ -17,12 +17,11 @@ package com.google.cloud.sme.pubsub;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import com.google.api.gax.batching.FlowControlSettings;
 import com.google.api.gax.grpc.InstantiatingGrpcChannelProvider;
 import com.google.cloud.pubsub.v1.AckReplyConsumer;
 import com.google.cloud.pubsub.v1.MessageReceiver;
-import com.google.pubsub.v1.PubsubMessage;
 import com.google.pubsub.v1.ProjectSubscriptionName;
+import com.google.pubsub.v1.PubsubMessage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.joda.time.DateTime;
@@ -32,17 +31,15 @@ import org.threeten.bp.Duration;
 public class Subscriber implements MessageReceiver {
   public static class Args {
     @Parameter(
-      names = {"--project", "-p"},
-      required = true,
-      description = "The Google Cloud Pub/Sub project in which the subscription exists."
-    )
+        names = {"--project", "-p"},
+        required = true,
+        description = "The Google Cloud Pub/Sub project in which the subscription exists.")
     public String project = null;
 
     @Parameter(
-      names = {"--subscription", "-s"},
-      required = true,
-      description = "The Google Cloud Pub/Sub subscription name to which to subscribe."
-    )
+        names = {"--subscription", "-s"},
+        required = true,
+        description = "The Google Cloud Pub/Sub subscription name to which to subscribe.")
     public String subscription = null;
   }
 
@@ -57,19 +54,25 @@ public class Subscriber implements MessageReceiver {
   private Long lastTimestamp = new Long(0);
   private Long outOfOrderCount = new Long(0);
   private Long lastReceivedTimestamp = new Long(0);
-  private ConcurrentHashMap<Integer,Integer> uniqueSeqNums = new ConcurrentHashMap<>();
-  private ConcurrentHashMap<String,String> uniqueMessageIDs = new ConcurrentHashMap<>();    
+  private ConcurrentHashMap<Integer, Integer> uniqueSeqNums = new ConcurrentHashMap<>();
+  private ConcurrentHashMap<String, String> uniqueMessageIDs = new ConcurrentHashMap<>();
 
   private VerifierWriter vWriter;
 
   private Subscriber(Args args) {
     this.args = args;
 
-    InstantiatingGrpcChannelProvider loadtestProvider = InstantiatingGrpcChannelProvider.newBuilder().setEndpoint("loadtest-pubsub.sandbox.googleapis.com:443").build();
+    InstantiatingGrpcChannelProvider loadtestProvider =
+        InstantiatingGrpcChannelProvider.newBuilder()
+            .setEndpoint("loadtest-pubsub.sandbox.googleapis.com:443")
+            .build();
 
-    ProjectSubscriptionName subscription = ProjectSubscriptionName.of(args.project, args.subscription);
+    ProjectSubscriptionName subscription =
+        ProjectSubscriptionName.of(args.project, args.subscription);
     com.google.cloud.pubsub.v1.Subscriber.Builder builder =
-        com.google.cloud.pubsub.v1.Subscriber.newBuilder(subscription, this).setChannelProvider(loadtestProvider).setMaxAckExtensionPeriod(Duration.ofMinutes(60));
+        com.google.cloud.pubsub.v1.Subscriber.newBuilder(subscription, this)
+            .setChannelProvider(loadtestProvider)
+            .setMaxAckExtensionPeriod(Duration.ofMinutes(60));
     try {
       this.subscriber = builder.build();
     } catch (Exception e) {
@@ -88,7 +91,7 @@ public class Subscriber implements MessageReceiver {
     String sequenceNumStr = message.getAttributesOrDefault(ORDERING_SEQUENCE_KEY, "-1");
     int sequenceNum = Integer.parseInt(sequenceNumStr);
     uniqueSeqNums.put(sequenceNum, sequenceNum);
-    uniqueMessageIDs.put(message.getMessageId(), message.getMessageId());    
+    uniqueMessageIDs.put(message.getMessageId(), message.getMessageId());
     long receivedCount = receivedMessageCount.addAndGet(1);
     vWriter.write(message.getOrderingKey(), sequenceNum);
     if (publishTime != "") {
@@ -110,10 +113,17 @@ public class Subscriber implements MessageReceiver {
       }
     }
     if (receivedCount == 1) {
-	System.out.println("First message received");
+      System.out.println("First message received");
     }
     if (receivedCount % 10000 == 0) {
-      System.out.println("Received " + receivedCount + " messages, " + uniqueSeqNums.size() + " unique sequence numbers, " + uniqueMessageIDs.size() + " unique message IDs.");
+      System.out.println(
+          "Received "
+              + receivedCount
+              + " messages, "
+              + uniqueSeqNums.size()
+              + " unique sequence numbers, "
+              + uniqueMessageIDs.size()
+              + " unique message IDs.");
     }
     consumer.ack();
   }
@@ -124,9 +134,16 @@ public class Subscriber implements MessageReceiver {
       long now = DateTime.now().getMillis();
       synchronized (lastTimestamp) {
         if ((now - lastReceivedTimestamp) > 60000) {
-	    System.out.println("No message received in a minute, " + receivedMessageCount.get() + " messages received, " + uniqueSeqNums.size() + " unique sequence numbers, " + uniqueMessageIDs.size() + " unique message IDs.");
-            vWriter.flush();	    
-	}
+          System.out.println(
+              "No message received in a minute, "
+                  + receivedMessageCount.get()
+                  + " messages received, "
+                  + uniqueSeqNums.size()
+                  + " unique sequence numbers, "
+                  + uniqueMessageIDs.size()
+                  + " unique message IDs.");
+          vWriter.flush();
+        }
         if (lastReceivedTimestamp > 0 && ((now - lastReceivedTimestamp) > 600000)) {
           subscriber.stopAsync();
           break;
@@ -138,8 +155,7 @@ public class Subscriber implements MessageReceiver {
         System.out.println("Error while waiting for completion: " + e);
       }
     }
-    System.out.println(
-        "Subscriber has not received message in 60s. Stopping.");
+    System.out.println("Subscriber has not received message in 60s. Stopping.");
     subscriber.awaitTerminated();
     vWriter.shutdown();
   }
