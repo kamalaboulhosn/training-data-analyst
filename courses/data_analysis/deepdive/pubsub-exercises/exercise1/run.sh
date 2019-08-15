@@ -10,6 +10,6 @@ echo "Create new subscription."
 CLOUDSDK_API_ENDPOINT_OVERRIDES_PUBSUB=https://loadtest-pubsub.sandbox.googleapis.com/ gcloud pubsub subscriptions create --topic pubsub-e2e-example $SUBSCRIPTION
 echo $SUBSCRIPTION > .last_subscription
 echo "Starting publisher and publishing 1M messages."
-java -Xmx1024m -cp target/pubsub.jar com.google.cloud.sme.pubsub.Publisher -p $PROJECT
+java -Xmx16384m -cp target/pubsub.jar com.google.cloud.sme.pubsub.Publisher -p $PROJECT
 echo "Starting subscriber."
-java -Xmx1024m -cp target/pubsub.jar com.google.cloud.sme.pubsub.Subscriber -p $PROJECT --subscription $SUBSCRIPTION
+java -Xmx16384m -cp target/pubsub.jar com.google.cloud.sme.pubsub.Subscriber -p $PROJECT --subscription $SUBSCRIPTION
