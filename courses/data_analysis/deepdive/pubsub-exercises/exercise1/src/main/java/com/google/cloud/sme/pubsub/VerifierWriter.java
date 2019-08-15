@@ -56,4 +56,12 @@ public class VerifierWriter {
       System.out.println("Failed to close: " + e);
     }
   }
+
+  public synchronized void flush() {
+    try {
+      verifierBWriter.flush();
+    } catch (IOException e) {
+      System.out.println("Failed to flush: " + e);
+    }
+  }
 }

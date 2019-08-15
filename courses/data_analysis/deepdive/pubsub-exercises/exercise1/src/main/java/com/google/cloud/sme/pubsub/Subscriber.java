@@ -23,7 +23,7 @@ import com.google.cloud.pubsub.v1.AckReplyConsumer;
 import com.google.cloud.pubsub.v1.MessageReceiver;
 import com.google.pubsub.v1.PubsubMessage;
 import com.google.pubsub.v1.ProjectSubscriptionName;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.joda.time.DateTime;
 import org.threeten.bp.Duration;
@@ -57,6 +57,8 @@ public class Subscriber implements MessageReceiver {
   private Long lastTimestamp = new Long(0);
   private Long outOfOrderCount = new Long(0);
   private Long lastReceivedTimestamp = new Long(0);
+  private ConcurrentHashMap<Integer,Integer> uniqueSeqNums = new ConcurrentHashMap<>();
+  private ConcurrentHashMap<String,String> uniqueMessageIDs = new ConcurrentHashMap<>();    
 
   private VerifierWriter vWriter;
 
@@ -67,7 +69,7 @@ public class Subscriber implements MessageReceiver {
 
     ProjectSubscriptionName subscription = ProjectSubscriptionName.of(args.project, args.subscription);
     com.google.cloud.pubsub.v1.Subscriber.Builder builder =
-        com.google.cloud.pubsub.v1.Subscriber.newBuilder(subscription, this).setChannelProvider(loadtestProvider);
+        com.google.cloud.pubsub.v1.Subscriber.newBuilder(subscription, this).setChannelProvider(loadtestProvider).setMaxAckExtensionPeriod(Duration.ofMinutes(60));
     try {
       this.subscriber = builder.build();
     } catch (Exception e) {
@@ -85,6 +87,8 @@ public class Subscriber implements MessageReceiver {
     String publishTime = message.getAttributesOrDefault(TIMESTAMP_KEY, "");
     String sequenceNumStr = message.getAttributesOrDefault(ORDERING_SEQUENCE_KEY, "-1");
     int sequenceNum = Integer.parseInt(sequenceNumStr);
+    uniqueSeqNums.put(sequenceNum, sequenceNum);
+    uniqueMessageIDs.put(message.getMessageId(), message.getMessageId());    
     long receivedCount = receivedMessageCount.addAndGet(1);
     vWriter.write(message.getOrderingKey(), sequenceNum);
     if (publishTime != "") {
@@ -105,9 +109,11 @@ public class Subscriber implements MessageReceiver {
         lastTimestamp = publishTimeParsed;
       }
     }
-    if (receivedCount % 100000 == 0) {
-      System.out.println(
-          "Received " + receivedCount + " messages, " + outOfOrderCount + " were out of order.");
+    if (receivedCount == 1) {
+	System.out.println("First message received");
+    }
+    if (receivedCount % 10000 == 0) {
+      System.out.println("Received " + receivedCount + " messages, " + uniqueSeqNums.size() + " unique sequence numbers, " + uniqueMessageIDs.size() + " unique message IDs.");
     }
     consumer.ack();
   }
@@ -117,7 +123,11 @@ public class Subscriber implements MessageReceiver {
     while (true) {
       long now = DateTime.now().getMillis();
       synchronized (lastTimestamp) {
-        if (lastReceivedTimestamp > 0 && ((now - lastReceivedTimestamp) > 60000)) {
+        if ((now - lastReceivedTimestamp) > 60000) {
+	    System.out.println("No message received in a minute, " + receivedMessageCount.get() + " messages received, " + uniqueSeqNums.size() + " unique sequence numbers, " + uniqueMessageIDs.size() + " unique message IDs.");
+            vWriter.flush();	    
+	}
+        if (lastReceivedTimestamp > 0 && ((now - lastReceivedTimestamp) > 600000)) {
           subscriber.stopAsync();
           break;
         }
